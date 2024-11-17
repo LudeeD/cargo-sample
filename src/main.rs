@@ -1,83 +1,72 @@
 use anyhow::{Context, Result};
-use clap::Parser;
-use std::{fs, path::PathBuf, process::Command};
-
-#[derive(Parser)]
-#[command(name = "cargo-try")]
-#[command(bin_name = "cargo")]
-#[command(about = "Generate a new project from a repository's examples")]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Parser)]
-enum Commands {
-    Try {
-        /// Repository URL to clone examples from
-        #[arg(short, long)]
-        repo: String,
-
-        /// Name of the example to use as template
-        #[arg(short, long)]
-        example: String,
-
-        /// Output directory name
-        #[arg(short, long)]
-        output: String,
-    },
-}
+use std::io::Write;
+use std::{fs, path::PathBuf, process::Command, ptr::addr_of_mut};
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
 
-    match cli.command {
-        Commands::Try {
-            repo,
-            example,
-            output,
-        } => {
-            // Create a temporary directory for cloning
-            let temp_dir = tempfile::tempdir()?;
+    assert!(
+        args.len() == 2,
+        "Arguments are not what I expected. Try running: cargo sample <REPO>"
+    );
 
-            // Clone the repository
-            println!("Cloning repository...");
-            Command::new("git")
-                .args(["clone", &repo, temp_dir.path().to_str().unwrap()])
-                .output()
-                .context("Failed to clone repository")?;
+    assert_eq!(
+        args[0], "sample",
+        "It seems that the binary is not being run with cargo. Try running: cargo sample <REPO>"
+    );
 
-            // Find the examples directory
-            let examples_dir = temp_dir.path().join("examples");
-            if !examples_dir.exists() {
-                anyhow::bail!("No examples directory found in repository");
-            }
+    let repo = &args[1];
 
-            // Find the specific example
-            let example_dir = examples_dir.join(&example);
-            if !example_dir.exists() {
-                anyhow::bail!("Example '{}' not found in examples directory", example);
-            }
+    let temp_dir = tempfile::tempdir()?;
 
-            // Create output directory
-            let output_dir = PathBuf::from(&output);
-            if output_dir.exists() {
-                anyhow::bail!("Output directory already exists");
-            }
+    println!(
+        "Cloning repository {} into temp dir {}",
+        repo,
+        temp_dir.path().to_str().unwrap()
+    );
 
-            // Copy example to output directory
-            println!("Generating project from example...");
-            copy_dir_recursively(&example_dir, &output_dir)?;
+    println!("Cloning repository...");
+    Command::new("git")
+        .args(["clone", &repo, temp_dir.path().to_str().unwrap()])
+        .output()
+        .context("Failed to clone repository")?;
 
-            // Update project name in Cargo.toml if it exists
-            if let Ok(cargo_toml) = fs::read_to_string(output_dir.join("Cargo.toml")) {
-                let updated_toml = cargo_toml.replace(&example, &output);
-                fs::write(output_dir.join("Cargo.toml"), updated_toml)?;
-            }
+    // Find the examples directory
+    let examples_dir = temp_dir.path().join("examples");
+    assert!(
+        examples_dir.exists(),
+        "No examples directory found in repository"
+    );
 
-            println!("Project generated successfully in '{}'", output);
-        }
+    // Present the user with a list of examples
+    let examples = fs::read_dir(&examples_dir)?;
+
+    for (i, example) in examples.enumerate() {
+        let example = example?;
+        println!("{}. {}", i, example.file_name().to_str().unwrap());
     }
+
+    print!("Choose an example: ");
+    std::io::stdout().flush()?;
+    let mut choice = String::new();
+    std::io::stdin().read_line(&mut choice).unwrap();
+    let choice = choice.trim().parse::<usize>().unwrap();
+
+    let example = fs::read_dir(&examples_dir)?
+        .nth(choice)
+        .unwrap()?
+        .file_name()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let path = examples_dir.join(&example);
+
+    // output folder is the current folder
+    let output = PathBuf::from(".");
+
+    println!("Copying the example to current folder");
+    copy_dir_recursively(&path, &output)?;
 
     Ok(())
 }
