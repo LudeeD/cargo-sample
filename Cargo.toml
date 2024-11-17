@@ -1,5 +1,7 @@
 [package]
 name = "cargo-try"
+description = "A cargo subcommand to quickly set you up with a new rust project based on a crate example"
+license = "MIT"
 version = "0.1.0"
 edition = "2021"
 
