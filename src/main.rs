@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::io::Write;
-use std::{fs, path::PathBuf, process::Command, ptr::addr_of_mut};
+use std::{fs, path::PathBuf, process::Command};
 
 fn main() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -27,7 +27,7 @@ fn main() -> Result<()> {
 
     println!("Cloning repository...");
     Command::new("git")
-        .args(["clone", &repo, temp_dir.path().to_str().unwrap()])
+        .args(["clone", repo, temp_dir.path().to_str().unwrap()])
         .output()
         .context("Failed to clone repository")?;
 
