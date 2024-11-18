@@ -36,6 +36,6 @@ This will:
 
 ## 📈 TODO
 
-- [] search for examples everywhere in the repo
-- [] replace local dependencies in toml of examples for crates io dependencies
-- [] allow sampling on already existing dir, kind of importing an example to my local project
+- [ ] search for examples everywhere in the repo
+- [ ] replace local dependencies in toml of examples for crates io dependencies
+- [ ] allow sampling on already existing dir, kind of importing an example to my local project
