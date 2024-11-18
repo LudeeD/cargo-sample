@@ -1,72 +1,92 @@
 use anyhow::{Context, Result};
-use std::io::Write;
+use argh::FromArgs;
+use inquire::Confirm;
+use inquire::Select;
 use std::{fs, path::PathBuf, process::Command};
 
+#[derive(FromArgs)]
+/// Always sample before you buy
+struct Sample {
+    // Cargo puts the command name invoked into the first argument,
+    // so we don't want this argument to show up in the usage text.
+    #[argh(positional, hidden_help)]
+    _command: String,
+    /// the repository to sample from
+    #[argh(positional)]
+    repo: String,
+
+    /// the optional folder to output the results
+    #[argh(positional)]
+    output: Option<String>,
+}
+
 fn main() -> Result<()> {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let demo = argh::from_env::<Sample>();
 
-    assert!(
-        args.len() == 2,
-        "Arguments are not what I expected. Try running: cargo sample <REPO>"
-    );
+    // check if git is installed
+    if Command::new("git").arg("--version").status().is_err() {
+        return Err(anyhow::anyhow!("Git is not installed"));
+    }
 
-    assert_eq!(
-        args[0], "sample",
-        "It seems that the binary is not being run with cargo. Try running: cargo sample <REPO>"
-    );
-
-    let repo = &args[1];
+    let repo = demo.repo;
 
     let temp_dir = tempfile::tempdir()?;
 
-    println!(
-        "Cloning repository {} into temp dir {}",
-        repo,
-        temp_dir.path().to_str().unwrap()
-    );
+    println!("Cloning repository: {}", repo);
 
-    println!("Cloning repository...");
     Command::new("git")
-        .args(["clone", repo, temp_dir.path().to_str().unwrap()])
+        .args(["clone", &repo, temp_dir.path().to_str().unwrap()])
         .output()
         .context("Failed to clone repository")?;
 
     // Find the examples directory
     let examples_dir = temp_dir.path().join("examples");
-    assert!(
-        examples_dir.exists(),
-        "No examples directory found in repository"
-    );
 
-    // Present the user with a list of examples
-    let examples = fs::read_dir(&examples_dir)?;
-
-    for (i, example) in examples.enumerate() {
-        let example = example?;
-        println!("{}. {}", i, example.file_name().to_str().unwrap());
+    if !examples_dir.exists() {
+        return Err(anyhow::anyhow!("No examples directory found in repository"));
     }
 
-    print!("Choose an example: ");
-    std::io::stdout().flush()?;
-    let mut choice = String::new();
-    std::io::stdin().read_line(&mut choice).unwrap();
-    let choice = choice.trim().parse::<usize>().unwrap();
+    // Present the user with a list of examples
+    let examples: Vec<String> = fs::read_dir(&examples_dir)?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let file_name = entry.file_name();
+            file_name.to_str()?.to_string().into()
+        })
+        .collect();
 
-    let example = fs::read_dir(&examples_dir)?
-        .nth(choice)
-        .unwrap()?
-        .file_name()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let ans = Select::new("Which example to use?", examples).prompt();
 
-    let path = examples_dir.join(&example);
+    let ans = ans.context("Failed to select example")?;
 
-    // output folder is the current folder
-    let output = PathBuf::from(".");
+    let path = examples_dir.join(&ans);
 
-    println!("Copying the example to current folder");
-    copy_dir_recursively(&path, &output)?;
+    // output is either the output folder or the current folder
+    let output = match demo.output {
+        Some(output) => PathBuf::from(output),
+        None => PathBuf::from("."),
+    };
+
+    let output_string = output.to_str().unwrap_or_default();
+    let confirmation_string = format!("Copy example to {}", output_string);
+    let ans = Confirm::new(&confirmation_string)
+        .with_default(false)
+        .with_help_message("Please confirm to continue")
+        .prompt();
+
+    match ans {
+        Ok(true) => {
+            println!("Copying example to {}", output_string);
+            copy_dir_recursively(&path, &output)?;
+        }
+        Ok(false) => {
+            println!("That's too bad...");
+            return Err(anyhow::anyhow!("User did not confirm"));
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Something went wrong: {}", e));
+        }
+    }
 
     Ok(())
 }

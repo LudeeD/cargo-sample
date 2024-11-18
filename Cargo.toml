@@ -2,9 +2,11 @@
 name = "cargo-sample"
 description = "A cargo subcommand to quickly set you up with a new rust project based on a crate example"
 license = "MIT"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0.93"
+argh = "0.1.12"
+inquire = "0.7.5"
 tempfile = "3.14.0"
