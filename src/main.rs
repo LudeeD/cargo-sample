@@ -1,9 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use argh::FromArgs;
-use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use cargo_metadata::Package;
-use crates_io_api::SyncClient;
 use inquire::Confirm;
 use inquire::Select;
 use std::{fs, path::PathBuf, process::Command};
@@ -104,7 +102,7 @@ fn main() -> Result<()> {
         .context("Failed to clone repository")?;
 
     Command::new("git")
-        .args(["checkout", &sha1])
+        .args(["checkout", sha1])
         .output()
         .context("Failed to checkout proper sha1")?;
 
@@ -165,12 +163,10 @@ fn copy_dir_recursively(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 
         if ty.is_dir() {
             copy_dir_recursively(&src_path, &dst_path)?;
+        } else if entry.file_name() == "Cargo.toml" {
+            merge_cargo_toml(&src_path, &dst_path)?;
         } else {
-            if entry.file_name() == "Cargo.toml" {
-                merge_cargo_toml(&src_path, &dst_path)?;
-            } else {
-                fs::copy(&src_path, &dst_path)?;
-            }
+            fs::copy(&src_path, &dst_path)?;
         }
     }
 
