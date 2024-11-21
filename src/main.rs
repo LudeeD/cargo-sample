@@ -5,7 +5,7 @@ use cargo_metadata::Package;
 use inquire::Confirm;
 use inquire::Select;
 use std::{fs, path::PathBuf, process::Command};
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 use toml_edit::Item;
 
 #[derive(FromArgs)]
@@ -179,40 +179,32 @@ fn merge_cargo_toml(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
     let src_content = fs::read_to_string(src_path)?;
 
     // Parse both files
-    let dst_doc = dst_content.parse::<Document>()?;
-    let mut src_doc = src_content.parse::<Document>()?;
+    let dst_doc = dst_content.parse::<DocumentMut>()?;
+    let mut src_doc = src_content.parse::<DocumentMut>()?;
 
     // Get the package name from the destination (original) Cargo.toml
     if let Some(dst_package) = dst_doc.get("package") {
         if let Some(dst_name) = dst_package.get("name") {
             // Replace the package name in the source Cargo.toml
-            if let Some(src_package) = src_doc.as_table_mut().get_mut("package") {
-                if let Item::Table(table) = src_package {
-                    table.insert("name", dst_name.clone());
-                }
+            if let Some(Item::Table(table)) = src_doc.as_table_mut().get_mut("package") {
+                table.insert("name", dst_name.clone());
             }
         }
     }
 
     // Merge dependencies, prioritizing destination dependencies
-    if let Some(src_deps) = src_doc.as_table_mut().get_mut("dependencies") {
-        if let Item::Table(src_deps_table) = src_deps {
-            // Remove any dependencies that exist in destination
-            if let Some(dst_deps) = dst_doc.get("dependencies") {
-                if let Item::Table(dst_deps_table) = dst_deps {
-                    for key in dst_deps_table.iter().map(|(k, _)| k) {
-                        src_deps_table.remove(key);
-                    }
-                }
+    if let Some(Item::Table(src_deps_table)) = src_doc.as_table_mut().get_mut("dependencies") {
+        // Remove any dependencies that exist in destination
+        if let Some(Item::Table(dst_deps_table)) = dst_doc.get("dependencies") {
+            for key in dst_deps_table.iter().map(|(k, _)| k) {
+                src_deps_table.remove(key);
             }
+        }
 
-            // Add back the destination dependencies
-            if let Some(dst_deps) = dst_doc.get("dependencies") {
-                if let Item::Table(dst_deps_table) = dst_deps {
-                    for (key, value) in dst_deps_table.iter() {
-                        src_deps_table.insert(key, value.clone());
-                    }
-                }
+        // Add back the destination dependencies
+        if let Some(Item::Table(dst_deps_table)) = dst_doc.get("dependencies") {
+            for (key, value) in dst_deps_table.iter() {
+                src_deps_table.insert(key, value.clone());
             }
         }
     }
