@@ -38,7 +38,8 @@ fn main() -> Result<()> {
 
     std::env::set_current_dir(&home_dir)?;
 
-    println!("Current directory: {:?}", std::env::current_dir()?);
+    let output = std::env::current_dir()?;
+    println!("Current directory: {:?}", output);
 
     // add the dependency we want to the project
 
@@ -127,7 +128,7 @@ fn main() -> Result<()> {
 
     let path = examples_dir.join(&ans);
 
-    let output_string = home_dir.to_str().unwrap_or_default();
+    let output_string = output.to_str().unwrap_or_default();
     let confirmation_string = format!("Copy example to {}", output_string);
     let ans = Confirm::new(&confirmation_string)
         .with_default(false)
@@ -137,7 +138,7 @@ fn main() -> Result<()> {
     match ans {
         Ok(true) => {
             println!("Copying example to {}", output_string);
-            copy_dir_recursively(&path, &home_dir)?;
+            copy_dir_recursively(&path, &output)?;
         }
         Ok(false) => {
             println!("That's too bad...");
